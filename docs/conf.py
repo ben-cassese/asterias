@@ -1,0 +1,79 @@
+# Configuration file for the Sphinx documentation builder.
+
+# For the full list of built-in configuration values, see the documentation:
+# https://www.sphinx-doc.org/en/master/usage/configuration.html
+
+# -- Project information -----------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath("."))
+sys.path.insert(0, os.path.abspath("../src"))
+
+project = "asterias"
+# copyright = '2025, Ben Cassese, Soichiro Hattori'
+author = "Ben Cassese, Soichiro Hattori"
+release = "0.0.1"
+
+# -- General configuration ---------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+
+extensions = [
+    # "sphinx_rtd_theme",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.autodoc",
+    "sphinx_autodoc_typehints",
+    "sphinx.ext.doctest",
+    "sphinx.ext.todo",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.viewcode",
+    "nbsphinx",
+    "sphinx_automodapi.automodapi",
+    "myst_parser",
+    "sphinxcontrib.video",
+    # "sphinx.ext.pngmath",
+]
+
+templates_path = ["_templates"]
+exclude_patterns = ["_build", "Thumbs.db", ".DS_Store", "visualizations"]
+source_suffix = [".rst", ".md"]
+
+
+# -- Options for HTML output -------------------------------------------------
+# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
+
+html_theme = "sphinx_book_theme"
+html_copy_source = True
+html_show_sourcelink = True
+html_sourcelink_suffix = ""
+html_title = "asterias"
+html_favicon = "_static/starfish.png"
+html_static_path = ["_static"]
+
+html_theme_options = {
+    "path_to_docs": "docs",
+    "repository_url": "https://github.com/ben-cassese/asterias",
+    "repository_branch": "main",
+    "use_repository_button": True,
+    "use_download_button": False,
+    "show_prev_next": False,
+    "logo": {
+        "text": "",
+        "image_light": "_static/starfish.png",
+        "image_dark": "_static/starfish.png",
+    },
+}
+
+html_context = {"default_mode": "dark"}
+
+html_sidebars = {
+    "**": ["navbar-logo.html", "search-field.html", "sbt-sidebar-nav.html"]
+}
+
+autodoc_typehints = "description"
+python_use_unqualified_type_names = True
+autodoc_typehints_format = "fully-qualified"
+napoleon_use_param = True
+napoleon_use_rtype = True
