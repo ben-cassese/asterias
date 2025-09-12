@@ -4,7 +4,7 @@ jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 
 import numpy as np
-from quadax import quadgk
+from quadax import simpson
 from interpax import PchipInterpolator
 
 
@@ -35,16 +35,9 @@ def compute_single_profile(
         )
         return filter_val * star_val
 
-    valid_stellar_pts = jnp.sum(
-        (stellar_wavelengths >= wavelength_range[0])
-        * (stellar_wavelengths <= wavelength_range[1])
-    )
-    valid_filter_pts = jnp.sum(
-        (filter_wavelengths >= wavelength_range[0])
-        * (filter_wavelengths <= wavelength_range[1])
-    )
-
-    num_pts = jnp.max(jnp.array([valid_stellar_pts, valid_filter_pts]) * 3)
+    # 60,000 is arbitrary but larger than the full number of
+    # wavelengths in a phoenix file
+    num_pts = 60_000
     integrands = jax.vmap(
         lambda stellar_intensities: integrand(
             waves=jnp.linspace(*wavelength_range, num_pts),
