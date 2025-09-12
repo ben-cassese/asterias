@@ -18,33 +18,42 @@ def compute_single_profile(
     stellar_wavelengths = stellar_data[:, 0]  # shape (n_wavelengths,)
     stellar_intensities = stellar_data[:, 1:]  # shape (n_wavelengths, n_mus)
 
-    def single_mu(stellar_inten):
-        def integrand(wav):
-            filter_val = jnp.interp(
-                x=wav,
-                xp=filter_wavelengths,
-                fp=filter_throughput,
-                left=0.0,
-                right=0.0,
-            )
-            star_val = jnp.interp(
-                x=wav,
-                xp=stellar_wavelengths,
-                fp=stellar_inten,
-                left=0.0,
-                right=0.0,
-            )
-            return filter_val * star_val
-
-        y, info = quadgk(
-            integrand,
-            [wavelength_range[0], wavelength_range[1]],
-            epsabs=1e-10,
-            epsrel=1e-10,
+    def integrand(waves, stellar_i):
+        filter_val = jnp.interp(
+            x=waves,
+            xp=filter_wavelengths,
+            fp=filter_throughput,
+            left=0.0,
+            right=0.0,
         )
-        return y
+        star_val = jnp.interp(
+            x=waves,
+            xp=stellar_wavelengths,
+            fp=stellar_i,
+            left=0.0,
+            right=0.0,
+        )
+        return filter_val * star_val
 
-    profile = jax.vmap(single_mu, in_axes=(1,))(stellar_intensities)
+    valid_stellar_pts = jnp.sum(
+        (stellar_wavelengths >= wavelength_range[0])
+        * (stellar_wavelengths <= wavelength_range[1])
+    )
+    valid_filter_pts = jnp.sum(
+        (filter_wavelengths >= wavelength_range[0])
+        * (filter_wavelengths <= wavelength_range[1])
+    )
+
+    num_pts = jnp.max(jnp.array([valid_stellar_pts, valid_filter_pts]) * 3)
+    integrands = jax.vmap(
+        lambda stellar_intensities: integrand(
+            waves=jnp.linspace(*wavelength_range, num_pts),
+            stellar_i=stellar_intensities,
+        )
+    )(stellar_intensities.T)
+    profile = jax.vmap(
+        lambda integrand: simpson(integrand, x=jnp.linspace(*wavelength_range, num_pts))
+    )(integrands)
     profile = profile / profile[0]
     return profile
 
