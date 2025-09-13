@@ -9,6 +9,17 @@ from asterias.download import download_all_data
 from asterias.interpolate import find_surrounding_cube, trilinearly_interpolated_weights
 from asterias.compute import compute_all_profiles
 
+def _convert_to_ld(poly_coeffs):
+    # there's probably an analytic way to do this but this seems to work ok
+    order = poly_coeffs.shape[0] - 1
+    mus = jnp.linspace(0, 1, order+1)
+    intensities = jnp.polyval(poly_coeffs, mus)
+    powers = jnp.arange(order + 1)[1:]
+    a = ((1 - mus) ** powers[:, None]).T
+    b = intensities - 1
+    ld_u_coeffs = -jnp.linalg.lstsq(a, b)[0]
+    return ld_u_coeffs
+
 
 def _get_ldcs(
     mus: jnp.ndarray,
@@ -37,7 +48,9 @@ def _get_ldcs(
     poly_coeffs = jax.vmap(jnp.polyfit, in_axes=(None, 0, None))(
         mus, weighted_profiles, poly_deg
     )
-    return poly_coeffs
+
+    ld_coeffs = jax.vmap(_convert_to_ld)(poly_coeffs)
+    return poly_coeffs, ld_coeffs
 
 
 class LimbDarkeningCoefficients:
