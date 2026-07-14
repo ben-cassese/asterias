@@ -20,7 +20,7 @@ wheels = [
 
 [[package]]
 name = "asterias"
-version = "0.0.1"
+version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "importlib" },
