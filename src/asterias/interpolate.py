@@ -12,13 +12,24 @@ def find_surrounding_cube(
     logg: float,
 ) -> jnp.ndarray:
 
-    # there's gotta be a better way to do this...
     def single_dimension_vals(coords, val):
-        coords = jnp.sort(coords)
-        flip = coords <= val
-        lower_idx = jnp.sum(flip) - 1
-        lower_idx = jnp.clip(lower_idx, 0, len(coords) - 2)
-        return jnp.array([coords[lower_idx], coords[lower_idx + 1]])
+        # bracket val between the two adjacent distinct grid values along this axis.
+        # coords holds one entry per grid point, so it is full of duplicates; work with
+        # values rather than indices to avoid a bracket that collapses onto a repeat.
+        lo = jnp.min(coords)
+        hi = jnp.max(coords)
+        val = jnp.clip(val, lo, hi)
+
+        # smallest grid value strictly above val. if val sits exactly on the top edge
+        # there is none, so fall back to the top edge itself and bracket downwards --
+        # otherwise the cube degenerates and the weights come out as nan.
+        upper = jnp.min(jnp.where(coords > val, coords, jnp.inf))
+        upper = jnp.where(jnp.isinf(upper), hi, upper)
+
+        # largest grid value strictly below that
+        lower = jnp.max(jnp.where(coords < upper, coords, -jnp.inf))
+
+        return jnp.array([lower, upper])
 
     mh_vals = single_dimension_vals(grid_pts[:, 0], mh)
     teff_vals = single_dimension_vals(grid_pts[:, 1], teff)

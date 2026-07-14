@@ -34,23 +34,22 @@ dev = [
     "black[jupyter]>=25.1.0",
     "codespell>=2.4.1",
     "matplotlib>=3.9.4",
-    "myst-parser>=3.0.1",
-    "nbsphinx>=0.9.7",
     "pre-commit>=4.2.0",
     "pytest>=8.3.5",
     "pytest-cov>=6.1.1",
     "pytest-xdist>=3.6.1",
     "ruff>=0.11.6",
-    "sphinx>=7.4.7",
-    "sphinx-autodoc-typehints>=2.3.0",
-    "sphinx-automodapi>=0.19.0",
-    "sphinx-book-theme>=1.1.4",
-    "sphinxcontrib-video>=0.4.1",
     "squishyplanet>=0.3.1",
-    "tox>=4.25.0",
-    "tox-gh-actions>=3.3.0",
-    "tox-uv>=1.25.0",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# tests import shared fixtures and analytic reference profiles from tests/conftest.py
+pythonpath = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/asterias"]
 
 [tool.ruff.lint]
 ignore = [

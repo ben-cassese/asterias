@@ -17,5 +17,8 @@ coverage.xml
 # Docs
 docs/_build/
 
+# Downloaded stellar grids
+data/
+
 *.DS_Store
 *slurm*

@@ -1,6 +1,6 @@
 import numpy as np
 import importlib.resources
-from asterias import sensitivity_files
+from asterias import grid_files, sensitivity_files
 
 REMOTE_LD_DATA_PATH = "https://www.star.bris.ac.uk/exotic-ld-data"
 
@@ -30,15 +30,15 @@ grid_components = {
 }
 # fmt: on
 
-# equivalent of the generate_stellar_model_points function
-_A, _B, _C = np.meshgrid(
-    grid_components["phoenix"]["M_H_grid"],
-    grid_components["phoenix"]["Teff_grid"],
-    grid_components["phoenix"]["logg_grid"],
-    indexing="ij",
-)
-PHOENIX_GRID = np.stack([_A.ravel(), _B.ravel(), _C.ravel()], axis=-1)
+# The phoenix grid is not rectangular: of the 10270 points the axes above would imply,
+# only 5079 are actually served. Four metallicities (-4.0, -3.0, -2.5, -2.0) are absent
+# entirely, and the remaining six have scattered gaps in the (teff, logg) plane. Rather
+# than take the outer product, read the list of points that really exist, enumerated by
+# querying the ExoTiC-LD server directly.
+_phoenix_file = importlib.resources.files(grid_files).joinpath("phoenix_grid.csv")
+PHOENIX_GRID = np.loadtxt(_phoenix_file, skiprows=1, delimiter=",")
 
+# equivalent of the generate_stellar_model_points function
 _A, _B, _C = np.meshgrid(
     grid_components["kurucz"]["M_H_grid"],
     grid_components["kurucz"]["Teff_grid"],
@@ -76,7 +76,7 @@ supported_instruments = [
     "JWST_NIRSpec_G395M",
     "JWST_NIRSpec_G235H",
     "JWST_NIRSpec_G235M",
-    # "JWST_NIRSpec_G140H", # not actually on the ExoTiC-LD server
+    "JWST_NIRSpec_G140H-f100",
     "JWST_NIRSpec_G140M-f100",
     "JWST_NIRSpec_G140H-f070",
     "JWST_NIRSpec_G140M-f070",
