@@ -7,7 +7,12 @@ import numpy as np
 
 from asterias.compute import compute_all_profiles, compute_single_profile
 
-from conftest import MUS, true_profile, write_synthetic_spectra
+from conftest import (
+    MUS,
+    true_profile,
+    write_synthetic_spectra,
+    write_phoenix_synthetic_spectra,
+)
 
 
 def read_synthetic(tmp_path, mh=0.0, teff=5000, logg=4.5):
@@ -115,3 +120,66 @@ class TestAllProfiles:
         )
         expected = true_profile(dense_mus, 0.0, 5000, 4.5)
         assert jnp.allclose(dense_profiles[0, 0], expected, atol=1e-4)
+
+
+class TestPhoenixMuTrim:
+    """
+    Phoenix files pack their densest mu sampling into a near-limb sliver above the photosphere
+    where the intensity collapses to ~0. That cliff makes a global polynomial fit oscillate and
+    go negative. The phoenix path trims it by keeping only mu >= mu_min.
+    """
+
+    def _phoenix_paths(self, tmp_path, teffs=(5000, 5200)):
+        paths = []
+        for teff in teffs:
+            p = str(tmp_path / "ph{}.dat".format(teff))
+            write_phoenix_synthetic_spectra(p, 0.0, teff, 4.5)
+            paths.append(p)
+        return paths
+
+    def test_dense_grid_is_trimmed_and_physical(self, tmp_path, flat_filter):
+        paths = self._phoenix_paths(tmp_path)
+        fw, ft = flat_filter
+        _, _, dense_mus, dense_profiles = compute_all_profiles(
+            paths,
+            jnp.array([[6000.0, 8000.0]]),
+            jnp.array(fw),
+            jnp.array(ft),
+            stellar_grid="phoenix",
+            mu_min=0.10,
+        )
+        # the cliff below mu_min is gone
+        assert jnp.isclose(dense_mus.min(), 0.10)
+        assert jnp.isclose(dense_mus.max(), 1.0)
+        # what remains is a physical, monotone limb-darkening profile
+        assert jnp.all(dense_profiles > 0.0)
+        assert jnp.all(jnp.diff(dense_profiles, axis=-1) > 0.0)
+
+    def test_trim_removes_the_polynomial_oscillation(self, tmp_path, flat_filter):
+        """The old (untrimmed) path fits the cliff and dips negative; the phoenix path does not."""
+        paths = self._phoenix_paths(tmp_path, teffs=(5000,))
+        fw, ft = flat_filter
+        wr = jnp.array([[6000.0, 8000.0]])
+
+        # stellar_grid=None keeps the original behaviour: fit over the full mu grid
+        _, _, dm_bug, dp_bug = compute_all_profiles(
+            paths, wr, jnp.array(fw), jnp.array(ft)
+        )
+        _, _, dm_fix, dp_fix = compute_all_profiles(
+            paths, wr, jnp.array(fw), jnp.array(ft), stellar_grid="phoenix", mu_min=0.10
+        )
+
+        mm = jnp.linspace(0.0, 1.0, 200)
+
+        def fit_and_flips(dense_mus, dense_prof):
+            coeffs = jnp.polyfit(dense_mus, dense_prof[0, 0], 6)
+            fit = jnp.polyval(coeffs, mm)
+            n_flips = int(jnp.sum(jnp.diff(jnp.sign(jnp.diff(fit))) != 0))
+            return fit, n_flips
+
+        fit_bug, _ = fit_and_flips(dm_bug, dp_bug)
+        fit_fix, n_fix = fit_and_flips(dm_fix, dp_fix)
+
+        assert fit_bug.min() < 0.0  # untrimmed fit is driven negative by the cliff
+        assert fit_fix.min() > 0.0  # trimmed fit stays physical
+        assert n_fix == 0  # and does not oscillate
