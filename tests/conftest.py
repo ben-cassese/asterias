@@ -54,6 +54,48 @@ def write_synthetic_spectra(path, mh, teff, logg):
             f.write(" ".join(["%.6e" % wav] + ["%.6e" % v for v in row]) + "\n")
 
 
+# phoenix samples mu with a coarse photospheric part plus a dense near-limb sliver that sits
+# above the photosphere, where the intensity collapses to ~0. That cliff is what makes a naive
+# global polynomial fit oscillate. Reproduce the layout here so the mu-trim path can be tested
+# without the real 86 MB models. Note the ascending-tail values are unique, as in real files.
+PHOENIX_MUS = np.concatenate(
+    [
+        np.linspace(1.0, 0.1, 15),  # coarse photospheric sampling
+        np.linspace(0.095, 0.02, 30),  # crammed extended-atmosphere sliver
+    ]
+)
+
+
+def phoenix_profile(mus, mh, teff, logg):
+    """
+    The photospheric quadratic (true_profile) for mu >= 0.1, with a steep near-limb cliff below
+    it: the intensity ramps down to 0 at the lowest mu, mimicking the phoenix extended
+    atmosphere that drives an untrimmed polynomial fit negative.
+    """
+    mus = np.asarray(mus)
+    cliff_edge = 0.1
+    limb = float(PHOENIX_MUS.min())
+    edge_val = float(true_profile(np.array([cliff_edge]), mh, teff, logg)[0])
+    ramp = np.clip((mus - limb) / (cliff_edge - limb), 0.0, 1.0)
+    return np.where(
+        mus < cliff_edge, edge_val * ramp, true_profile(mus, mh, teff, logg)
+    )
+
+
+def write_phoenix_synthetic_spectra(path, mh, teff, logg):
+    """Write one phoenix-shaped model in the ExoTiC-LD format (separable, like the kurucz one)."""
+    flux = 1e15 * (WAVELENGTHS / 5000.0) ** -2.0  # arbitrary; must cancel
+    profile = phoenix_profile(PHOENIX_MUS, mh, teff, logg)
+    intensities = flux[:, None] * profile[None, :]
+
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write("phoenix synthetic test spectra\n")
+        f.write(" ".join(str(m) for m in PHOENIX_MUS) + "\n")
+        for wav, row in zip(WAVELENGTHS, intensities):
+            f.write(" ".join(["%.6e" % wav] + ["%.6e" % v for v in row]) + "\n")
+
+
 def build_grid_on_disk(root, grid_name, mhs, teffs, loggs, skip=()):
     """
     Lay out a synthetic stellar grid exactly where the downloader would cache it.

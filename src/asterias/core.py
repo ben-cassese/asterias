@@ -112,6 +112,7 @@ class LimbDarkeningCoefficients:
         ld_data_path: str,
         verbose: bool = True,
         n_workers: int = 1,
+        mu_min: float = 0.10,
     ):
         self.poly_deg = poly_deg
         _check_wavelength_ranges(
@@ -136,6 +137,8 @@ class LimbDarkeningCoefficients:
                 filter_wavelengths,
                 filter_throughput,
                 grid_pts=self.grid_pts,
+                stellar_grid=stellar_grid,
+                mu_min=mu_min,
             )
         )
 

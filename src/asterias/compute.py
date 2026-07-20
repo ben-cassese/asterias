@@ -115,35 +115,85 @@ def compute_all_profiles(
     filter_throughput: jnp.ndarray,
     grid_pts: np.ndarray = None,
     poly_order: int = 20,
+    stellar_grid: str = None,
+    mu_min: float = 0.10,
 ) -> tuple:
     # entries of filepaths are None where the server has no model for that grid point
     present = [i for i, p in enumerate(filepaths) if p is not None]
 
-    mus = np.loadtxt(filepaths[present[0]], skiprows=1, max_rows=1)
-    order = np.argsort(mus)
-    mus = mus[order]
-    dense_mus = jnp.linspace(jnp.min(mus), jnp.max(mus), poly_order * 10)
-
-    actual_intensities = jnp.zeros((len(filepaths), len(wavelength_ranges), len(mus)))
-    interpolated_intensities = jnp.zeros(
-        (len(filepaths), len(wavelength_ranges), poly_order * 10)
-    )
-
-    # can't vmap b/c of the i/o
-    for i in present:
-        stellar_data = np.loadtxt(filepaths[i], skiprows=2)
-        grid_pt_intensities = jax.vmap(
-            compute_single_profile, in_axes=(None, 0, None, None)
-        )(
-            stellar_data,
-            wavelength_ranges,
-            filter_wavelengths,
-            filter_throughput,
+    if stellar_grid == "phoenix":
+        # phoenix packs its densest mu sampling into a near-limb sliver that lies *above* the
+        # photosphere, where the intensity falls to ~0. That cliff makes the downstream global
+        # polynomial fit oscillate and go negative, so trim it: read each file's own mu grid,
+        # keep mu >= mu_min, and resample onto one shared dense grid. Reading the grid per file
+        # also matters because -- unlike the other grids -- phoenix files do not share one mu
+        # grid, so the single grid read below would otherwise be misapplied to every file.
+        dense_mus = jnp.linspace(mu_min, 1.0, poly_order * 10)
+        interpolated_intensities = jnp.zeros(
+            (len(filepaths), len(wavelength_ranges), poly_order * 10)
         )
-        interpolator = PchipInterpolator(x=mus, y=grid_pt_intensities[:, order], axis=1)
-        dense_intensities = interpolator(dense_mus)
-        actual_intensities = actual_intensities.at[i].set(grid_pt_intensities[:, order])
-        interpolated_intensities = interpolated_intensities.at[i].set(dense_intensities)
+
+        # can't vmap b/c of the i/o
+        for i in present:
+            file_mus = np.loadtxt(filepaths[i], skiprows=1, max_rows=1)
+            order = np.argsort(file_mus)
+            file_mus = file_mus[order]
+            keep = file_mus >= mu_min
+
+            stellar_data = np.loadtxt(filepaths[i], skiprows=2)
+            grid_pt_intensities = jax.vmap(
+                compute_single_profile, in_axes=(None, 0, None, None)
+            )(
+                stellar_data,
+                wavelength_ranges,
+                filter_wavelengths,
+                filter_throughput,
+            )
+            interpolator = PchipInterpolator(
+                x=file_mus[keep], y=grid_pt_intensities[:, order][:, keep], axis=1
+            )
+            interpolated_intensities = interpolated_intensities.at[i].set(
+                interpolator(dense_mus)
+            )
+
+        # phoenix has no single native mu grid, so the dense grid stands in for the "native"
+        # outputs too. These two are only returned for inspection; get_ldcs uses the dense pair.
+        mus = dense_mus
+        actual_intensities = interpolated_intensities
+    else:
+        mus = np.loadtxt(filepaths[present[0]], skiprows=1, max_rows=1)
+        order = np.argsort(mus)
+        mus = mus[order]
+        dense_mus = jnp.linspace(jnp.min(mus), jnp.max(mus), poly_order * 10)
+
+        actual_intensities = jnp.zeros(
+            (len(filepaths), len(wavelength_ranges), len(mus))
+        )
+        interpolated_intensities = jnp.zeros(
+            (len(filepaths), len(wavelength_ranges), poly_order * 10)
+        )
+
+        # can't vmap b/c of the i/o
+        for i in present:
+            stellar_data = np.loadtxt(filepaths[i], skiprows=2)
+            grid_pt_intensities = jax.vmap(
+                compute_single_profile, in_axes=(None, 0, None, None)
+            )(
+                stellar_data,
+                wavelength_ranges,
+                filter_wavelengths,
+                filter_throughput,
+            )
+            interpolator = PchipInterpolator(
+                x=mus, y=grid_pt_intensities[:, order], axis=1
+            )
+            dense_intensities = interpolator(dense_mus)
+            actual_intensities = actual_intensities.at[i].set(
+                grid_pt_intensities[:, order]
+            )
+            interpolated_intensities = interpolated_intensities.at[i].set(
+                dense_intensities
+            )
 
     missing = np.array([p is None for p in filepaths])
     if missing.any():
